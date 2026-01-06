@@ -4,49 +4,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Questões - Instagram Reels</title>
+    <title>Gerador de Questões - Instagram Reels (+Vídeo)</title>
 
-    <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 
-    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- HTML2Canvas (para exportar imagem) -->
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
     <style>
-        /* Fonte Inter para leitura limpa em telas */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-
-        /* Scrollbar personalizada */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
+        body { font-family: 'Inter', sans-serif; }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         .preview-container {
             aspect-ratio: 9/16;
@@ -61,11 +40,53 @@
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
 
-        // Ícones SVG Inline via Lucide
+        // Ícones
         const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg>;
+        const IconVideo = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
         const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>;
         const IconLayout = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="3" x2="21" y1="9" y2="9" /><line x1="9" x2="9" y1="21" y2="9" /></svg>;
-        const IconType = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7" /><line x1="9" x2="15" y1="20" y2="20" /><line x1="12" x2="12" y1="4" y2="20" /></svg>;
+
+        // --- FUNÇÃO AUXILIAR: Gerador de Som de Chuva (Pink Noise) ---
+        // Cria um som de chuva usando Web Audio API para evitar arquivos externos e CORS
+        const createRainNoise = (audioCtx) => {
+            const bufferSize = 2 * audioCtx.sampleRate;
+            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            
+            // Gerar Pink Noise (mais suave que White Noise, parece chuva)
+            let b0, b1, b2, b3, b4, b5, b6;
+            b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                b0 = 0.99886 * b0 + white * 0.0555179;
+                b1 = 0.99332 * b1 + white * 0.0750759;
+                b2 = 0.96900 * b2 + white * 0.1538520;
+                b3 = 0.86650 * b3 + white * 0.3104856;
+                b4 = 0.55000 * b4 + white * 0.5329522;
+                b5 = -0.7616 * b5 - white * 0.0168980;
+                output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                output[i] *= 0.11; // Compensar ganho
+                b6 = white * 0.115926;
+            }
+
+            const noiseNode = audioCtx.createBufferSource();
+            noiseNode.buffer = noiseBuffer;
+            noiseNode.loop = true;
+
+            // Filtro Lowpass para abafar o som (parecer chuva distante/suave)
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 800; // Hz
+
+            // Controle de Volume
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.value = 0.08; // Volume bem baixinho
+
+            noiseNode.connect(filter);
+            filter.connect(gainNode);
+            
+            return { node: noiseNode, output: gainNode };
+        };
 
         const App = () => {
             // Estados do Conteúdo
@@ -73,7 +94,7 @@
             const [ano, setAno] = useState('2025');
             const [cargo, setCargo] = useState('CARGO');
             const [enunciado, setEnunciado] = useState('Enunciado da questão vai aqui. Você pode digitar ou colar o texto completo da questão para visualizar como ficará no post do Instagram Reels.');
-            const [tipoQuestao, setTipoQuestao] = useState('multipla'); // 'multipla' ou 'certoerrado'
+            const [tipoQuestao, setTipoQuestao] = useState('multipla');
 
             // Estados das Opções
             const [opcoes, setOpcoes] = useState([
@@ -89,67 +110,20 @@
             const [branding, setBranding] = useState('@concursos_fbr');
 
             // Estados de Estilização
-            const [tema, setTema] = useState('paper'); // dark, light, blue, purple
-            const [tamanhoFonte, setTamanhoFonte] = useState(16); // px base
-            const [safeZone, setSafeZone] = useState(false); // Mostrar guias do Instagram
+            const [tema, setTema] = useState('paper');
+            const [tamanhoFonte, setTamanhoFonte] = useState(16);
+            const [safeZone, setSafeZone] = useState(false);
             const [loading, setLoading] = useState(false);
+            const [progressVideo, setProgressVideo] = useState(0); // Para mostrar progresso da geração
 
             const previewRef = useRef(null);
 
-            // Definições de Temas - Agora com cores explícitas para Badges
+            // Definições de Temas
             const temas = {
-                dark: {
-                    bg: 'bg-slate-900',
-                    cardBg: 'bg-slate-800',
-                    text: 'text-white',
-                    accent: 'text-emerald-400',
-                    border: 'border-slate-700',
-                    badgeBg: 'bg-slate-700',
-                    badgeText: 'text-slate-200',
-                    optionBg: 'bg-slate-700',
-                    optionHover: 'bg-slate-600',
-                    correctBg: 'bg-emerald-600',
-                    correctBorder: 'border-emerald-400'
-                },
-                light: {
-                    bg: 'bg-gray-100',
-                    cardBg: 'bg-white',
-                    text: 'text-slate-800',
-                    accent: 'text-blue-600',
-                    border: 'border-gray-200',
-                    badgeBg: 'bg-white',
-                    badgeText: 'text-slate-700',
-                    optionBg: 'bg-gray-50',
-                    optionHover: 'bg-gray-100',
-                    correctBg: 'bg-green-100',
-                    correctBorder: 'border-green-500'
-                },
-                purple: {
-                    bg: 'bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900',
-                    cardBg: 'bg-white/10 backdrop-blur-md',
-                    text: 'text-white',
-                    accent: 'text-purple-300',
-                    border: 'border-white/20',
-                    badgeBg: 'bg-white/20',
-                    badgeText: 'text-white',
-                    optionBg: 'bg-white/5',
-                    optionHover: 'bg-white/10',
-                    correctBg: 'bg-green-500/20',
-                    correctBorder: 'border-green-400'
-                },
-                paper: {
-                    bg: 'bg-[#fdfbf7]',
-                    cardBg: 'bg-white shadow-xl',
-                    text: 'text-slate-900',
-                    accent: 'text-orange-600',
-                    border: 'border-stone-200',
-                    badgeBg: 'bg-stone-200',
-                    badgeText: 'text-stone-800',
-                    optionBg: 'bg-stone-50',
-                    optionHover: 'bg-stone-100',
-                    correctBg: 'bg-green-50',
-                    correctBorder: 'border-green-600'
-                }
+                dark: { bg: 'bg-slate-900', cardBg: 'bg-slate-800', text: 'text-white', accent: 'text-emerald-400', border: 'border-slate-700', badgeBg: 'bg-slate-700', badgeText: 'text-slate-200', optionBg: 'bg-slate-700', optionHover: 'bg-slate-600', correctBg: 'bg-emerald-600', correctBorder: 'border-emerald-400' },
+                light: { bg: 'bg-gray-100', cardBg: 'bg-white', text: 'text-slate-800', accent: 'text-blue-600', border: 'border-gray-200', badgeBg: 'bg-white', badgeText: 'text-slate-700', optionBg: 'bg-gray-50', optionHover: 'bg-gray-100', correctBg: 'bg-green-100', correctBorder: 'border-green-500' },
+                purple: { bg: 'bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900', cardBg: 'bg-white/10 backdrop-blur-md', text: 'text-white', accent: 'text-purple-300', border: 'border-white/20', badgeBg: 'bg-white/20', badgeText: 'text-white', optionBg: 'bg-white/5', optionHover: 'bg-white/10', correctBg: 'bg-green-500/20', correctBorder: 'border-green-400' },
+                paper: { bg: 'bg-[#fdfbf7]', cardBg: 'bg-white shadow-xl', text: 'text-slate-900', accent: 'text-orange-600', border: 'border-stone-200', badgeBg: 'bg-stone-200', badgeText: 'text-stone-800', optionBg: 'bg-stone-50', optionHover: 'bg-stone-100', correctBg: 'bg-green-50', correctBorder: 'border-green-600' }
             };
 
             const currentTheme = temas[tema];
@@ -158,24 +132,129 @@
             const handleExport = async () => {
                 if (!previewRef.current) return;
                 setLoading(true);
-                setSafeZone(false); // Remove guias antes de printar
-
-                // Aguarda renderização
+                setSafeZone(false);
                 setTimeout(async () => {
                     try {
-                        const canvas = await html2canvas(previewRef.current);
-
+                        const canvas = await html2canvas(previewRef.current, { scale: 2, useCORS: true });
                         const link = document.createElement('a');
                         link.download = `questao-${banca}-${cargo}.png`;
                         link.href = canvas.toDataURL('image/png');
                         link.click();
                     } catch (err) {
-                        console.error("Erro ao gerar imagem", err);
+                        console.error(err);
                         alert("Erro ao gerar imagem.");
                     } finally {
                         setLoading(false);
                     }
                 }, 100);
+            };
+
+            // --- NOVA FUNÇÃO: Gerar Vídeo ---
+            const handleGenerateVideo = async () => {
+                if (!previewRef.current) return;
+                
+                // Validação de Browser (Safari mobile tem limitações com MediaRecorder, mas funciona na maioria)
+                if (!window.MediaRecorder) {
+                    alert("Seu navegador não suporta gravação de vídeo. Tente usar Chrome ou Firefox no Desktop/Android.");
+                    return;
+                }
+
+                setLoading(true);
+                setSafeZone(false); // Esconde guias
+                setProgressVideo(1);
+
+                // Salvar estado atual para restaurar depois
+                const estadoOriginalResposta = mostrarResposta;
+
+                try {
+                    // Passo 1: Gerar Imagem da PERGUNTA (0-20s)
+                    setMostrarResposta(false);
+                    await new Promise(r => setTimeout(r, 200)); // Esperar React renderizar
+                    const canvasPergunta = await html2canvas(previewRef.current, { scale: 1.5, useCORS: true }); // Scale 1.5 para performance
+                    
+                    // Passo 2: Gerar Imagem da RESPOSTA (20-25s)
+                    setMostrarResposta(true);
+                    await new Promise(r => setTimeout(r, 200)); // Esperar React renderizar
+                    const canvasResposta = await html2canvas(previewRef.current, { scale: 1.5, useCORS: true });
+
+                    // Passo 3: Configurar Canvas de Gravação
+                    const recordCanvas = document.createElement('canvas');
+                    recordCanvas.width = canvasPergunta.width;
+                    recordCanvas.height = canvasPergunta.height;
+                    const ctx = recordCanvas.getContext('2d');
+
+                    // Passo 4: Configurar Áudio (Chuva)
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const audioDest = audioCtx.createMediaStreamDestination();
+                    const { node: rainSource, output: rainOutput } = createRainNoise(audioCtx);
+                    rainOutput.connect(audioDest);
+                    rainSource.start();
+
+                    // Passo 5: Iniciar Stream Combinada (Canvas + Audio)
+                    const canvasStream = recordCanvas.captureStream(30); // 30 FPS
+                    const audioStream = audioDest.stream;
+                    const combinedStream = new MediaStream([
+                        ...canvasStream.getVideoTracks(),
+                        ...audioStream.getAudioTracks()
+                    ]);
+
+                    const recorder = new MediaRecorder(combinedStream, {
+                        mimeType: 'video/webm;codecs=vp9' 
+                    });
+
+                    const chunks = [];
+                    recorder.ondataavailable = e => chunks.push(e.data);
+                    
+                    recorder.onstop = () => {
+                        rainSource.stop();
+                        audioCtx.close();
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `video_reels_${banca}.mp4`;
+                        a.click();
+                        setLoading(false);
+                        setProgressVideo(0);
+                        setMostrarResposta(estadoOriginalResposta); // Restaurar
+                    };
+
+                    // Passo 6: Loop de Animação e Gravação
+                    recorder.start();
+                    const startTime = Date.now();
+                    const duration = 25000; // 25s total
+                    const switchTime = 20000; // 20s muda
+
+                    const drawFrame = () => {
+                        const elapsed = Date.now() - startTime;
+                        
+                        // Atualizar barra de progresso visualmente no botão
+                        setProgressVideo(Math.min(100, Math.round((elapsed / duration) * 100)));
+
+                        if (elapsed < switchTime) {
+                            // Fase 1: Pergunta
+                            ctx.drawImage(canvasPergunta, 0, 0);
+                        } else {
+                            // Fase 2: Resposta
+                            ctx.drawImage(canvasResposta, 0, 0);
+                        }
+
+                        if (elapsed < duration) {
+                            requestAnimationFrame(drawFrame);
+                        } else {
+                            recorder.stop();
+                        }
+                    };
+
+                    drawFrame(); // Iniciar loop
+
+                } catch (err) {
+                    console.error("Erro no vídeo:", err);
+                    alert("Erro ao gerar vídeo. Verifique o console.");
+                    setLoading(false);
+                    setProgressVideo(0);
+                    setMostrarResposta(estadoOriginalResposta);
+                }
             };
 
             const handleOpcaoChange = (index, valor) => {
@@ -184,7 +263,6 @@
                 setOpcoes(novasOpcoes);
             };
 
-            // Renderização da Preview
             return (
                 <div className="min-h-screen flex flex-col lg:flex-row">
 
@@ -194,99 +272,55 @@
 
                             <div className="flex items-center justify-between">
                                 <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Criador de Questões</h1>
-                                <span className="text-xs font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded">v1.0 Reels</span>
+                                <span className="text-xs font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded">v2.0 Video</span>
                             </div>
 
                             {/* Seção: Dados da Banca */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-600 mb-1">Banca</label>
-                                    <input
-                                        type="text"
-                                        value={banca}
-                                        onChange={(e) => setBanca(e.target.value)}
-                                        className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                                    />
+                                    <input type="text" value={banca} onChange={(e) => setBanca(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-600 mb-1">Ano</label>
-                                    <input
-                                        type="text"
-                                        value={ano}
-                                        onChange={(e) => setAno(e.target.value)}
-                                        className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                    <input type="text" value={ano} onChange={(e) => setAno(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
                                 <div className="col-span-2">
                                     <label className="block text-sm font-semibold text-slate-600 mb-1">Cargo / Disciplina</label>
-                                    <input
-                                        type="text"
-                                        value={cargo}
-                                        onChange={(e) => setCargo(e.target.value)}
-                                        className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                    <input type="text" value={cargo} onChange={(e) => setCargo(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
                             </div>
 
                             {/* Seção: Enunciado */}
                             <div>
                                 <label className="block text-sm font-semibold text-slate-600 mb-1">Enunciado da Questão</label>
-                                <textarea
-                                    value={enunciado}
-                                    onChange={(e) => setEnunciado(e.target.value)}
-                                    rows="5"
-                                    className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-sans text-base"
-                                    placeholder="Digite o texto da questão aqui..."
-                                ></textarea>
+                                <textarea value={enunciado} onChange={(e) => setEnunciado(e.target.value)} rows="5" className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-sans text-base" placeholder="Digite o texto da questão aqui..."></textarea>
                             </div>
 
                             {/* Seção: Configuração Visual */}
                             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
-                                <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                                    <IconLayout size={18} /> Estilo & Layout
-                                </h3>
-
+                                <h3 className="font-bold text-slate-700 flex items-center gap-2"><IconLayout size={18} /> Estilo & Layout</h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tema</label>
-                                        <select
-                                            value={tema}
-                                            onChange={(e) => setTema(e.target.value)}
-                                            className="w-full p-2 bg-white border border-gray-300 rounded"
-                                        >
-                                            <option value="dark">Dark Mode (Clássico)</option>
-                                            <option value="light">Light Mode (Limpo)</option>
-                                            <option value="purple">Modern Purple (Gradiente)</option>
+                                        <select value={tema} onChange={(e) => setTema(e.target.value)} className="w-full p-2 bg-white border border-gray-300 rounded">
+                                            <option value="dark">Dark Mode</option>
+                                            <option value="light">Light Mode</option>
+                                            <option value="purple">Modern Purple</option>
                                             <option value="paper">Papel (Editorial)</option>
                                         </select>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tamanho da Fonte</label>
                                         <div className="flex items-center gap-2">
-                                            <input
-                                                type="range"
-                                                min="12"
-                                                max="24"
-                                                value={tamanhoFonte}
-                                                onChange={(e) => setTamanhoFonte(parseInt(e.target.value))}
-                                                className="w-full accent-blue-600"
-                                            />
+                                            <input type="range" min="12" max="24" value={tamanhoFonte} onChange={(e) => setTamanhoFonte(parseInt(e.target.value))} className="w-full accent-blue-600" />
                                             <span className="text-xs font-mono w-8">{tamanhoFonte}px</span>
                                         </div>
                                     </div>
                                 </div>
-
-                                <div className="flex items-center justify-between pt-2">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            id="safeZone"
-                                            checked={safeZone}
-                                            onChange={(e) => setSafeZone(e.target.checked)}
-                                            className="w-4 h-4 rounded text-blue-600"
-                                        />
-                                        <label htmlFor="safeZone" className="text-sm text-slate-700 cursor-pointer select-none">Mostrar Guia "Safe Zone" Instagram</label>
-                                    </div>
+                                <div className="flex items-center gap-2 pt-2">
+                                    <input type="checkbox" id="safeZone" checked={safeZone} onChange={(e) => setSafeZone(e.target.checked)} className="w-4 h-4 rounded text-blue-600" />
+                                    <label htmlFor="safeZone" className="text-sm text-slate-700 cursor-pointer select-none">Mostrar Guia "Safe Zone"</label>
                                 </div>
                             </div>
 
@@ -294,41 +328,24 @@
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center mb-2">
                                     <label className="block text-sm font-semibold text-slate-600">Alternativas</label>
-
                                     <div className="flex items-center bg-gray-100 rounded p-1">
-                                        <button
-                                            onClick={() => setTipoQuestao('multipla')}
-                                            className={`text-xs px-3 py-1 rounded transition ${tipoQuestao === 'multipla' ? 'bg-white shadow text-blue-600 font-bold' : 'text-slate-500'}`}
-                                        >Múltipla</button>
-                                        <button
-                                            onClick={() => setTipoQuestao('certoerrado')}
-                                            className={`text-xs px-3 py-1 rounded transition ${tipoQuestao === 'certoerrado' ? 'bg-white shadow text-blue-600 font-bold' : 'text-slate-500'}`}
-                                        >C/E</button>
+                                        <button onClick={() => setTipoQuestao('multipla')} className={`text-xs px-3 py-1 rounded transition ${tipoQuestao === 'multipla' ? 'bg-white shadow text-blue-600 font-bold' : 'text-slate-500'}`}>Múltipla</button>
+                                        <button onClick={() => setTipoQuestao('certoerrado')} className={`text-xs px-3 py-1 rounded transition ${tipoQuestao === 'certoerrado' ? 'bg-white shadow text-blue-600 font-bold' : 'text-slate-500'}`}>C/E</button>
                                     </div>
                                 </div>
 
                                 {tipoQuestao === 'multipla' ? (
                                     opcoes.map((opcao, idx) => (
                                         <div key={opcao.id} className="flex gap-2 items-start">
-                                            <div
-                                                onClick={() => setRespostaCorreta(opcao.id)}
-                                                className={`w-10 h-10 flex-shrink-0 flex items-center justify-center rounded cursor-pointer border font-bold transition
-                                                    ${respostaCorreta === opcao.id ? 'bg-emerald-100 border-emerald-500 text-emerald-700' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}
-                                                `}
-                                            >
+                                            <div onClick={() => setRespostaCorreta(opcao.id)} className={`w-10 h-10 flex-shrink-0 flex items-center justify-center rounded cursor-pointer border font-bold transition ${respostaCorreta === opcao.id ? 'bg-emerald-100 border-emerald-500 text-emerald-700' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
                                                 {opcao.id}
                                             </div>
-                                            <input
-                                                type="text"
-                                                value={opcao.texto}
-                                                onChange={(e) => handleOpcaoChange(idx, e.target.value)}
-                                                className="flex-1 p-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none"
-                                            />
+                                            <input type="text" value={opcao.texto} onChange={(e) => handleOpcaoChange(idx, e.target.value)} className="flex-1 p-2 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none" />
                                         </div>
                                     ))
                                 ) : (
                                     <div className="p-4 bg-yellow-50 text-yellow-800 text-sm rounded border border-yellow-200">
-                                        Modo Certo/Errado selecionado. As opções A e B serão usadas automaticamente como Certo e Errado na visualização.
+                                        Modo Certo/Errado selecionado. As opções A e B serão usadas automaticamente.
                                     </div>
                                 )}
                             </div>
@@ -336,148 +353,82 @@
                             {/* Seção: Branding */}
                             <div>
                                 <label className="block text-sm font-semibold text-slate-600 mb-1">Seu Instagram / Autor</label>
-                                <input
-                                    type="text"
-                                    value={branding}
-                                    onChange={(e) => setBranding(e.target.value)}
-                                    className="w-full p-2 border border-gray-300 rounded text-sm"
-                                    placeholder="@seuusuario"
-                                />
+                                <input type="text" value={branding} onChange={(e) => setBranding(e.target.value)} className="w-full p-2 border border-gray-300 rounded text-sm" placeholder="@seuusuario" />
                             </div>
-
                         </div>
                     </div>
 
                     {/* --- COLUNA DIREITA: PREVIEW --- */}
                     <div className="w-full lg:w-1/2 bg-gray-200 flex flex-col items-center justify-center p-4 lg:p-10 relative overflow-hidden">
 
-                        {/* Controles Flutuantes da Preview */}
-                        <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
-                            <button
-                                onClick={() => setMostrarResposta(!mostrarResposta)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg font-bold transition transform active:scale-95 border
-                                    ${mostrarResposta ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-slate-700 border-gray-200 hover:bg-gray-50'}
-                                `}
-                            >
+                        {/* Controles Flutuantes */}
+                        <div className="absolute top-4 right-4 flex flex-col gap-2 z-20 items-end">
+                            <button onClick={() => setMostrarResposta(!mostrarResposta)} className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg font-bold transition transform active:scale-95 border ${mostrarResposta ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-slate-700 border-gray-200 hover:bg-gray-50'}`}>
                                 <IconCheck size={18} /> {mostrarResposta ? 'Ocultar Resposta' : 'Revelar Resposta'}
                             </button>
 
-                            <button
-                                onClick={handleExport}
-                                disabled={loading}
-                                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg font-bold hover:bg-blue-700 transition transform active:scale-95 border border-blue-700 disabled:opacity-50"
-                            >
-                                {loading ? 'Gerando...' : <><IconDownload size={18} /> Baixar PNG</>}
+                            <button onClick={handleExport} disabled={loading} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg font-bold hover:bg-blue-700 transition transform active:scale-95 border border-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                {loading && progressVideo === 0 ? 'Processando...' : <><IconDownload size={18} /> Baixar Imagem</>}
+                            </button>
+
+                            <button onClick={handleGenerateVideo} disabled={loading} className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-full shadow-lg font-bold hover:bg-purple-700 transition transform active:scale-95 border border-purple-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[160px] justify-center relative overflow-hidden">
+                                {loading && progressVideo > 0 ? (
+                                    <>
+                                        <span className="relative z-10">{progressVideo}%</span>
+                                        <div className="absolute left-0 top-0 bottom-0 bg-purple-800 transition-all duration-300" style={{width: `${progressVideo}%`}}></div>
+                                    </>
+                                ) : (
+                                    <><IconVideo size={18} /> Gerar Vídeo 25s</>
+                                )}
                             </button>
                         </div>
 
-                        {/* ÁREA DE RENDERIZAÇÃO (Aspect Ratio 9:16) */}
-                        <div
-                            className="relative shadow-2xl overflow-hidden"
-                            style={{
-                                height: '100vh',
-                                aspectRatio: '9/16',
-                                fontSize: `${tamanhoFonte}px`
-                            }}
-                        >
-                            <div
-                                ref={previewRef}
-                                className={`w-full h-full flex flex-col relative ${currentTheme.bg} ${currentTheme.text} transition-colors duration-300`}
-                            >
-                                {/* Overlay Safe Zone (Só visualização) */}
+                        {/* ÁREA DE RENDERIZAÇÃO */}
+                        <div className="relative shadow-2xl overflow-hidden" style={{ height: '100vh', aspectRatio: '9/16', fontSize: `${tamanhoFonte}px` }}>
+                            <div ref={previewRef} className={`w-full h-full flex flex-col relative ${currentTheme.bg} ${currentTheme.text} transition-colors duration-300`}>
+                                {/* Overlay Safe Zone */}
                                 {safeZone && (
                                     <div className="absolute inset-0 pointer-events-none z-50 border-[2px] border-red-500/30">
-                                        <div className="absolute bottom-0 left-0 right-0 h-[20%] bg-red-500/10 border-t border-red-500/30 flex items-center justify-center text-red-500/50 text-xs font-bold uppercase">Área Legenda/Comentários</div>
+                                        <div className="absolute bottom-0 left-0 right-0 h-[20%] bg-red-500/10 border-t border-red-500/30 flex items-center justify-center text-red-500/50 text-xs font-bold uppercase">Área Legenda</div>
                                         <div className="absolute top-0 right-0 bottom-[20%] w-[15%] bg-red-500/10 border-l border-red-500/30 flex items-center justify-center text-red-500/50 text-xs font-bold uppercase writing-mode-vertical">Botoes</div>
-                                        <div className="absolute top-0 left-0 right-0 h-[10%] bg-red-500/10 border-b border-red-500/30"></div>
                                     </div>
                                 )}
 
-                                {/* CONTAINER PRINCIPAL DE CONTEÚDO (Centralizado na Safe Zone) */}
-                                {/* pt-20 (topo seguro ajustado), pb-40 (fundo seguro ajustado), px-10 (lateral) */}
                                 <div className="flex-1 flex flex-col justify-center pt-20 pb-40 px-10 w-full h-full">
-
-                                    {/* Wrapper do Conteúdo para manter tudo junto e centralizado */}
                                     <div className="flex flex-col gap-6 w-full">
-
-                                        {/* Header da Questão */}
+                                        {/* Header */}
                                         <div className="w-full">
-                                            {/* Removido opacity-90 para garantir visibilidade total */}
                                             <div className="flex flex-wrap gap-2 mb-4 mt-4">
-                                                {/* Aplicando cores explícitas de badgeBg e badgeText */}
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider  `}>
-                                                    {cargo}
-                                                </span>
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider  `}>
-                                                    -
-                                                </span>
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider  `}>
-                                                    {banca}
-                                                </span>
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider  `}>
-                                                    -
-                                                </span>
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider  `}>
-                                                    {ano}
-                                                </span>
+                                                {[cargo, '-', banca, '-', ano].map((item, i) => (
+                                                    <span key={i} className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${currentTheme.badgeText}`}>{item}</span>
+                                                ))}
                                             </div>
                                             <div className={`h-1 w-12 rounded-full bg-current opacity-40 mt-2`}></div>
                                         </div>
 
                                         {/* Enunciado */}
-                                        <div className="font-medium leading-relaxed whitespace-pre-wrap">
-                                            {enunciado}
-                                        </div>
+                                        <div className="font-medium leading-relaxed whitespace-pre-wrap">{enunciado}</div>
 
                                         {/* Alternativas */}
                                         <div className="space-y-3">
                                             {tipoQuestao === 'multipla' ? (
                                                 opcoes.map((op) => {
                                                     const isCorrect = mostrarResposta && respostaCorreta === op.id;
-
                                                     return (
-                                                        <div
-                                                            key={op.id}
-                                                            className={`p-4 rounded-xl border flex gap-4 items-start transition-all duration-500
-                                                                ${isCorrect
-                                                                    ? `${currentTheme.correctBg} ${currentTheme.correctBorder} scale-105 shadow-lg z-10 font-bold`
-                                                                    : `${currentTheme.optionBg} ${currentTheme.border} opacity-90`
-                                                                }
-                                                            `}
-                                                        >
-                                                            <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold
-                                                                
-                                                            `}>
-                                                                {op.id}
-                                                            </div>
-
+                                                        <div key={op.id} className={`p-4 rounded-xl border flex gap-4 items-start transition-all duration-500 ${isCorrect ? `${currentTheme.correctBg} ${currentTheme.correctBorder} scale-105 shadow-lg z-10 font-bold` : `${currentTheme.optionBg} ${currentTheme.border} opacity-90`}`}>
+                                                            <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold  ${isCorrect ? 'text-emerald-800' : ''}`}>{op.id}</div>
                                                             <span className="leading-snug text-[0.95em] mt-1">{op.texto}</span>
-
-                                                            {isCorrect && (
-                                                                <div className="ml-auto text-emerald-500 flex-shrink-0 mt-1">
-                                                                    <IconCheck />
-                                                                </div>
-                                                            )}
+                                                            {isCorrect && <div className="ml-auto text-emerald-500 flex-shrink-0 mt-1"><IconCheck /></div>}
                                                         </div>
                                                     )
                                                 })
                                             ) : (
-                                                // Modo Certo/Errado
                                                 <div className="flex gap-4 mt-4">
                                                     {['Certo', 'Errado'].map((label, idx) => {
-                                                        const mappedId = idx === 0 ? 'A' : 'B';
+                                                        const mappedId = idx === 0 ? 'A' : 'B'; // A=Certo, B=Errado (Gambiarra simples para usar o mesmo estado)
                                                         const isCorrect = mostrarResposta && respostaCorreta === mappedId;
-
                                                         return (
-                                                            <div
-                                                                key={label}
-                                                                className={`flex-1 p-6 rounded-xl border text-center font-bold text-xl transition-all
-                                                                    ${isCorrect
-                                                                        ? `${currentTheme.correctBg} ${currentTheme.correctBorder} scale-105 shadow-lg`
-                                                                        : `${currentTheme.optionBg} ${currentTheme.border}`
-                                                                    }
-                                                                `}
-                                                            >
+                                                            <div key={label} className={`flex-1 p-6 rounded-xl border text-center font-bold text-xl transition-all ${isCorrect ? `${currentTheme.correctBg} ${currentTheme.correctBorder} scale-105 shadow-lg` : `${currentTheme.optionBg} ${currentTheme.border}`}`}>
                                                                 {label}
                                                                 {isCorrect && <div className="mx-auto mt-2 text-emerald-500"><IconCheck className="mx-auto" /></div>}
                                                             </div>
@@ -487,25 +438,20 @@
                                             )}
                                         </div>
 
-                                        {/* Footer / Branding (Integrado ao fluxo) */}
+                                        {/* Footer */}
                                         <div className="pt-4 w-full text-center">
                                             <div className="flex items-center justify-center gap-2 opacity-60 text-sm font-semibold tracking-wide">
                                                 <span>{branding}</span>
                                             </div>
                                         </div>
-
                                     </div>
                                 </div>
-
-                                {/* Decorativo de fundo */}
                                 <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-current opacity-[0.03] rounded-full blur-3xl pointer-events-none"></div>
                                 <div className="absolute top-20 left-0 w-32 h-32 bg-current opacity-[0.03] rounded-full blur-2xl pointer-events-none"></div>
-
                             </div>
                         </div>
-                        <p className="mt-4 text-xs text-gray-500 font-medium">Visualização prévia (escala reduzida). O arquivo baixado terá alta qualidade.</p>
+                        <p className="mt-4 text-xs text-gray-500 font-medium">Visualização prévia. O vídeo será baixado em .webm (compatível com web).</p>
                     </div>
-
                 </div>
             );
         };
@@ -514,5 +460,4 @@
         root.render(<App />);
     </script>
 </body>
-
 </html>
